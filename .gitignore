@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+mysql_data/
+rabbitmq_data/
+*.log
