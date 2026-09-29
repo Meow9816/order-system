@@ -1,0 +1,106 @@
+services:
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka-broker
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:9093'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  init-topic:
+    image: apache/kafka:3.7.0
+    container_name: init_topic
+    command: >
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic multi-partition-topic --partitions 2 --replication-factor 1
+    restart: "no"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8081:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local-kafka
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # ---------- Группа 1 (consumer1.py, group.id = group-1) ----------
+  consumer_1:
+    build: .
+    container_name: python-consumer-1
+    command: python consumer1.py
+    environment:
+      WORKER_NAME: Worker-A1
+    restart: unless-stopped
+    depends_on:
+      init-topic:
+        condition: service_completed_successfully
+
+  consumer_2:
+    build: .
+    container_name: python-consumer-2
+    command: python consumer1.py
+    environment:
+      WORKER_NAME: Worker-A2
+    restart: unless-stopped
+    depends_on:
+      init-topic:
+        condition: service_completed_successfully
+
+  # ---------- Группа 2 (consumer2.py, group.id = group-2) ----------
+  consumer_3:
+    build: .
+    container_name: python-consumer-3
+    command: python consumer2.py
+    environment:
+      WORKER_NAME: Worker-B1
+    restart: unless-stopped
+    depends_on:
+      init-topic:
+        condition: service_completed_successfully
+
+  consumer_4:
+    build: .
+    container_name: python-consumer-4
+    command: python consumer2.py
+    environment:
+      WORKER_NAME: Worker-B2
+    restart: unless-stopped
+    depends_on:
+      init-topic:
+        condition: service_completed_successfully
+
+  # ---------- Продюсер (бесконечный цикл) ----------
+  producer:
+    build: .
+    container_name: python-producer
+    command: python producer.py
+    restart: unless-stopped
+    depends_on:
+      init-topic:
+        condition: service_completed_successfully
+      consumer_1:
+        condition: service_started
+      consumer_3:
+        condition: service_started

@@ -4,4 +4,6 @@ __pycache__/
 .env
 mysql_data/
 rabbitmq_data/
+rabbitmq/
 *.log
+*.rar

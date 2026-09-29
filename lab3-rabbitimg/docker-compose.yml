@@ -1,0 +1,40 @@
+version: "3"
+
+services:
+  rabbit_mq:
+    image: rabbitmq:3.10.7-management
+    container_name: rabbit_mq
+    hostname: rabbitmq
+    restart: always
+    ports:
+      - '15672:15672'
+    volumes:
+      - rabbit_mqdata:/usr/share/rabbitmq/data
+
+  producer:
+    build: ./producer
+    depends_on:
+      - rabbit_mq
+    volumes:
+      - ./images:/usr/src/app/producer/images
+    environment:
+      - RABBITMQ_URL=amqp://rabbit_mq?connection_attempts=10&retry_delay=10
+
+  consumer:
+    build: ./consumer
+    depends_on:
+      - rabbit_mq
+    volumes:
+      - ./output:/usr/src/app/consumer/output
+    environment:
+      - RABBITMQ_URL=amqp://rabbit_mq?connection_attempts=10&retry_delay=10
+
+  consumer2:
+    build: ./consumer2
+    depends_on:
+      - rabbit_mq
+    environment:
+      - RABBITMQ_URL=amqp://rabbit_mq?connection_attempts=10&retry_delay=10
+
+volumes:
+  rabbit_mqdata:
